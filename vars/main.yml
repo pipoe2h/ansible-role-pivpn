@@ -1,0 +1,10 @@
+---
+# vars file for pipoe2h.pivpn
+
+packages:
+  - openvpn
+  - iptables
+  - easy-rsa
+
+easyrsa:
+  directory: /etc/openvpn/easy-rsa
