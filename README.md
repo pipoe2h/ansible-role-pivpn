@@ -43,6 +43,9 @@ openvpn:
 ([defaults/credentials.yml](defaults/credentials.yml))
 
 ```yaml
+# You can use Ansible Vault to encrypt your credentials file. Also, change the file permissions to 0600
+#   ansible-vault encrypt <role_path>/defaults/credentials.yml
+
 # If you want to create an initial client, complete the variables
 client:
   username: "" # OpenVPN client username
