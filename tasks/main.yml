@@ -1,0 +1,6 @@
+---
+# tasks file for pipoe2h.pivpn
+
+- include: installation.yml
+- include: easy-rsa.yml
+- include: openvpn.yml
