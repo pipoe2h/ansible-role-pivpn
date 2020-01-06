@@ -1,7 +1,18 @@
 ---
 
-- name: Install packages
+- name: Install minimal packages for openvpn to work
   apt:
-    name: "{{ item }}"
-    state: latest
-  with_items: "{{ packages }}"
+    name:
+      - openvpn
+      - iptables
+      - easy-rsa
+      - tar
+      - wget
+      - grep
+      - iptables-persistent
+      - dnsutils
+      - net-tools
+      - apt-transport-https
+      - expect
+    state: present
+    force_apt_get: yes
