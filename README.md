@@ -58,6 +58,16 @@ certificate:
 
 Dependencies
 ------------
+## Pivpn Source
+You'll need to to git clone / symlink to the pivpn upstream project
+
+i.e.
+```
+cd ansible-role-pivpn/templates
+ln -s /Users/njl/dev/src/github.com/pivpn/pivpn/scripts/ pivpn
+```
+
+## Ansible
 Some variables are purposefully set outside of the defaults* via group_vars or host_vars at the playbook level. Those variables are:
 
 ```
