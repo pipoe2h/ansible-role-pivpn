@@ -1,3 +1,3 @@
-#!/bin/sh 
+#!/bin/sh
 
-iptables -t nat -A POSTROUTING -s {{ openvpn.server_subnet }}/{{ openvpn.server_netmask }} -o eth0 -j SNAT --to-source {{ ansible_default_ipv4.address }}
+iptables -t nat -A POSTROUTING -s {{ openVPN.server.server_subnet }}/{{ openVPN.server.server_netmask }} -o eth0 -j SNAT --to-source {{ ansible_default_ipv4.address }}

@@ -1,37 +1,55 @@
 local {{ ansible_default_ipv4.address }}
-dev tun 
-proto {{ openvpn.protocol }}
-port {{ openvpn.port }}
-ca /etc/openvpn/easy-rsa/keys/ca.crt 
-cert /etc/openvpn/easy-rsa/keys/{{ ansible_hostname }}.crt
-key /etc/openvpn/easy-rsa/keys/{{ ansible_hostname }}.key
-dh /etc/openvpn/easy-rsa/keys/dh{{ certificate.key_size }}.pem
-server {{ openvpn.server_subnet }} {{ openvpn.server_netmask }} 
-# server and remote endpoints 
-ifconfig {{ openvpn.server_tun0 }} {{ openvpn.server_tun0_ptp }}
-# Add route to Client routing table for the OpenVPN Server 
-push "route {{ openvpn.server_tun0 }} 255.255.255.255" 
-# Add route to Client routing table for the OpenVPN Subnet 
-push "route {{ openvpn.server_subnet }} {{ openvpn.server_netmask }}" 
-# your local subnet 
-push "route {{ ansible_default_ipv4.address }} {{ openvpn.local_netmask }}"
-# Set primary domain name server address to the SOHO Router 
-# If your router does not do DNS, you can use Google DNS 8.8.8.8 
-push "dhcp-option DNS {{ openvpn.dns_ip }}"
-# Override the Client default gateway by using 0.0.0.0/1 and 
-# 128.0.0.0/1 rather than 0.0.0.0/0. This has the benefit of 
-# overriding but not wiping out the original default gateway. 
-push "redirect-gateway def1" 
-client-to-client 
-duplicate-cn 
-keepalive 10 120 
-tls-auth /etc/openvpn/easy-rsa/keys/ta.key 0 
-cipher AES-128-CBC 
-comp-lzo 
-user nobody 
-group nogroup 
-persist-key 
-persist-tun 
-status /var/log/openvpn-status.log 20 
-log /var/log/openvpn.log 
+dev tun
+proto {{ openVPN.server.protocol }}
+port {{ openVPN_server_port }}
+ca {{ easyrsa.directory }}/pki//ca.crt
+cert {{ easyrsa.directory }}/pki/issued/{{ ansible_hostname }}.crt
+key {{ easyrsa.directory }}/pki/private//{{ ansible_hostname }}.key
+dh {{ easyrsa.directory }}/pki/dh{{ certificate.key_size }}.pem
+topology subnet
+server {{ openVPN.server.server_subnet }} {{ openVPN.server.server_netmask }}
+# Set primary domain name server address to the SOHO Router
+# If your router does not do DNS, you can use Google DNS 8.8.8.8
+push "dhcp-option DNS {{ openVPN.server.dns_ip_1 }}"
+push "dhcp-option DNS {{ openVPN.server.dns_ip_2 }}"
+# Prevent DNS leaks on Windows
+push "block-outside-dns"
+
+#FIXME: look at This
+# Override the Client default gateway by using 0.0.0.0/1 and
+# 128.0.0.0/1 rather than 0.0.0.0/0. This has the benefit of
+# overriding but not wiping out the original default gateway.
+
+#      $SUDO sed -i "s/tls-auth \/etc\/openvpn\/easy-rsa\/pki\/ta.key 0/tls-crypt \/etc\/openvpn\/easy-rsa\/pki\/ta.key/" /etc/openvpn/server.conf
+
+# server and remote endpoints
+ifconfig {{ openVPN.server.server_tun0 }} {{ openVPN.server.server_tun0_ptp }}
+# Add route to Client routing table for the OpenVPN Server
+push "route {{ openVPN.server.server_tun0 }} 255.255.255.255"
+# Add route to Client routing table for the OpenVPN Subnet
+push "route {{ openVPN.server.server_subnet }} {{ openVPN.server.server_netmask }}"
+# your local subnet
+push "route {{ ansible_default_ipv4.address }} {{ openVPN.server.local_netmask }}"
+# Override the Client default gateway by using 0.0.0.0/1 and
+# 128.0.0.0/1 rather than 0.0.0.0/0. This has the benefit of
+# overriding but not wiping out the original default gateway.
+push "redirect-gateway def1"
+client-to-client
+#duplicate-cn
+crl-verify /etc/openvpn/crl.pem
+keepalive 1800 3600
+tls-version-min 1.2
+remote-cert-tls client
+tls-crypt {{ easyrsa.directory }}/pki/ta.key
+cipher AES-256-CBC
+auth SHA256
+user nobody
+group nogroup
+persist-key
+persist-tun
+status /var/log/openvpn-status.log 20
+status-version 3
+syslog
+verb 3
+log /var/log/openvpn.log
 verb 1

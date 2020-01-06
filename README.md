@@ -11,6 +11,8 @@ Eth0 should be configured with a static IP or DHCP reservation (things will brea
 
 TODO
 --------------
+  * systemd symlinks need to be created.
+  * set-cap openvpn so it can run with less privs
   * I've left in the original defaults although they are largely redundant - as I have multiple locations installed
   * iptables defaults have not been done yet.
   * I have not got around to calling the pivpn scripts to create a default session(s) although the stubbing is there.

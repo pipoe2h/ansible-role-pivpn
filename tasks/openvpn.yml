@@ -3,15 +3,20 @@
 
 - name: Check if OpenVPN HMAC key exists
   stat:
-    path: "{{ easyrsa.directory }}/keys/ta.key"
+    path: "{{ easyrsa.directory }}/pki/ta.key"
   register: openvpnhmac
 
 - name: Generate the static HMAC key
   shell: openvpn --genkey --secret ta.key
   args:
     executable: /bin/bash
-    chdir: "{{ easyrsa.directory }}/keys"
+    chdir: "{{ easyrsa.directory }}/pki/"
   when: openvpnhmac.stat.exists == False
+
+- name: Sanity Check
+  debug:
+    msg: "{{openVPN}} {{easyrsa.directory}}"
+
 - name: Copy OpenVPN server.conf file
   template:
     src: "{{ role_path }}/templates/openvpn_server.conf.j2"
@@ -19,7 +24,27 @@
     mode: 0644
     owner: root
     group: root
-  notify: restart openvpn
+#  notify: restart openvpn
+
+
+#| $SUDO tee /etc/rsyslog.d/30-openvpn.conf > /dev/null
+
+- name: Generate the rsyslog config
+  shell:  cat > 30-openvpn.conf
+  args:
+    executable: /bin/bash
+    chdir: "/etc/rsyslog.d/"
+    stdin: "if $programname == 'ovpn-server' then /var/log/openvpn.log \n    if $programname == 'ovpn-server' then stop"
+
+#- name: Copy OpenVPN log rotate config
+#  template:
+#    src: "{{ role_path }}/templates/logrotate.conf.j2"
+#    dest: /etc/logrotate.d/openvpn
+#    mode: 0644
+#    owner: root
+#    group: root
+#  notify: restart rsyslog
+
 
 - name: Enable packet forwarding for IPv4
   replace:
@@ -40,9 +65,14 @@
     owner: root
     group: root
 
-- name: Enable OpenVPN firewall rule execution in the network interface
-  lineinfile:
-    dest: /etc/network/interfaces
-    insertafter: '^iface eth0'
-    line: ' pre-up /etc/firewall-openvpn-rules.sh'
-  notify: restart networking
+## FIXME: enable systemd service ln -s /lib/systemd/system/openvpn-server\@.service openvpn-server@server.service
+
+
+# FIXME: Need to support dhcpcd / multiple files
+
+#- name: Enable OpenVPN firewall rule execution in the network interface
+#  lineinfile:
+#    dest: /etc/network/interfaces
+#    insertafter: '^iface eth0'
+#    line: ' pre-up /etc/firewall-openvpn-rules.sh'
+#  notify: restart networking
