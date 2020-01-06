@@ -1,8 +1,6 @@
 ---
 # tasks file for pipoe2h.pivpn
 
-- include_vars: defaults/credentials.yml
-
 - name: Check if Easy RSA directory exists
   stat:
     path: "{{ easyrsa.directory }}"
@@ -20,85 +18,174 @@
     owner: root
     group: root
 
-- name: Remove --interact option for all the build-* scripts
-  replace:
-    dest: "{{ easyrsa.directory }}/{{ item }}"
-    regexp: ' --interact'
-    replace: ''
-    backup: yes
-  with_items:
-    - build-ca
-    - build-inter
-    - build-key
-    - build-key-pass
-    - build-key-pkcs12
-    - build-key-server
-    - build-req
-    - build-req-pass
-
-- name: Check if Easy RSA keys directory exists
+- name: Check if Easy RSA pki directory exists
   stat:
-    path: "{{ easyrsa.directory }}/keys"
+    path: "{{ easyrsa.directory }}/pki/"
   register: easykeysdir
 
-- name: Configure Easy RSA certificates
-  shell: source ./vars && ./clean-all && ./build-ca && ./build-key-server "{{ ansible_hostname }}"
+- name: Init PKI folder
+  shell: ./easyrsa --batch init-pki
   args:
     executable: /bin/bash
     chdir: "{{ easyrsa.directory }}"
   when: easykeysdir.stat.exists == False
-  register: easyrsaconfig
 
-- name: Modify pkitool to allow passout client password
-  replace:
-    dest: "{{ easyrsa.directory }}/pkitool"
-    regexp: 'NODES_REQ=""'
-    replace: 'NODES_REQ="-passout env:KEY_PASSWORD"'
-    backup: yes
+- name: Check if Easy RSA pki directory exists
+  stat:
+    path: "{{ easyrsa.directory }}/pki/"
+  register: easykeysdir
+
+- name: Sanity Check
+  debug:
+    msg: "Sanity Check {{ easyrsa.directory }}/pki/  {{easykeysdir.stat.exists}} {{ openVPN_client_username }} {{openVPN}}"
+
+- name: Check if Easy RSA pki directory exists
+  stat:
+    path: "{{ easyrsa.directory }}/pki/ca.crt"
+  register: easyrsaca
+
+- name: Check if the host key has been created
+  stat:
+    path: "{{ easyrsa.directory }}/pki/private/{{ ansible_hostname }}.key"
+  register: easyrsahostkey
+
+- name: Configure CA - First Time
+  shell: ./easyrsa build-ca nopass
+  args:
+    executable: /bin/bash
+    chdir: "{{ easyrsa.directory }}"
+  when: easyrsaca.stat.exists == False
+  register: easyrsaconfig_ca
+
+
+- name: Configure Easy RSA certificates for hostname
+  shell: ./easyrsa build-server-full "{{ ansible_hostname }}" nopass
+  args:
+    executable: /bin/bash
+    chdir: "{{ easyrsa.directory }}"
+  when: easykeysdir.stat.exists == True and easyrsahostkey.stat.exists == False
+  register: easyrsaconfig_server
+
 
 - name: Check if Easy RSA client certificate exists
   stat:
-    path: "{{ easyrsa.directory }}/keys/{{ client.username }}.key"
+    path: "{{ easyrsa.directory }}/pki/private/{{ openVPN_client_username }}.key"
   register: easyclient
-  when: client != ""
+  when: openVPN_client_username != ""
 
+#FIXME: This is messed up
 - name: Create Easy RSA certificate for OpenVPN client
-  shell: source ./vars && ./build-key-pass "{{ client.username }}"
+  shell: ./easyrsa build-client-full "{{ openVPN_client_username }}" nopass
   args:
     executable: /bin/bash
     chdir: "{{ easyrsa.directory }}"
   environment:
-    KEY_PASSWORD: "{{ client.password }}"
-  when: easyclient is defined and easyclient.stat.exists == False
+    KEY_PASSWORD: "{{ openVPN_client_password }}"
+  when: openVPN_client_username != "" and easyclient.stat.exists == False
 
 - name: Check if Easy RSA DES3 client certificate exists
   stat:
-    path: "{{ easyrsa.directory }}/keys/{{ client.username }}.3des.key"
+    path: "{{ easyrsa.directory }}/pki/private/{{ openVPN_client_username }}.3des.key"
   register: easyclientdes3
-  when: client != ""
+  when: openVPN_client_username != "" and easyclient.stat.exists == False
+
+- name: Sanity Check #2
+  debug:
+    msg: Sanity Check "{{ easyrsa.directory }}/pki/private/{{ openVPN_client_username }}.key"
+
 
 - name: Convert OpenVPN client key to DES3 for Android or iOS clients
-  shell: openssl rsa -in "{{ client.username }}.key" -des3 -out "{{ client.username }}.3des.key" -passin pass:$KEY_PASSWORD -passout pass:$KEY_PASSWORD
+  shell: openssl ec -in "{{ easyrsa.directory }}/pki/private/{{ openVPN_client_username }}.key" -des3 -out "{{ easyrsa.directory }}/pki/private/{{ openVPN_client_username }}.3des.key" -passin pass:$KEY_PASSWORD -passout pass:$KEY_PASSWORD
   args:
     executable: /bin/bash
-    chdir: "{{ easyrsa.directory }}/keys"
+    chdir: "{{ easyrsa.directory }}/pki/private/"
   environment:
-    KEY_PASSWORD: "{{ client.password }}"
-  when: easyclientdes3 is defined and easyclientdes3.stat.exists == False 
+    KEY_PASSWORD: "{{ openVPN_client_password }}"
+  when: easyclientdes3 is defined and openVPN_client_username != "" and easyclient.stat.exists == False
 
 - name: Check if Easy RSA DH pem exists
   stat:
-    path: "{{ easyrsa.directory }}/keys/dh{{ certificate.key_size }}.pem"
+    path: "{{ easyrsa.directory }}/pki/dh{{ certificate.key_size }}.pem"
   register: easydh
 
 - debug: msg="Be patient with the next play, that will take a while"
 
 - name: Build Easy RSA DH
-  shell: source ./vars && ./build-dh
+  shell: ./easyrsa gen-dh
   args:
     executable: /bin/bash
     chdir: "{{ easyrsa.directory }}"
-  async: 5000
+  async: 3600
   poll: 30
-  notify: restart openvpn
+#  notify: restart openvpn
   when: easydh.stat.exists == False
+
+- name: Check if Empty CTL exists
+  stat:
+    path: "/etc/openvpn/crl.pem"
+  register: emptycrl
+
+- name: Generate an empty Certificate Revocation List
+  shell: ./easyrsa gen-crl
+  args:
+    executable: /bin/bash
+    chdir: "{{ easyrsa.directory }}"
+  when: emptycrl.stat.exists == False
+
+- name: Copy empty cert file into place
+  copy:
+    src: "{{ easyrsa.directory }}/pki/crl.pem"
+    dest: /etc/openvpn/crl.pem
+    owner: nobody
+    group: nogroup
+    mode: '0660'
+    remote_src: yes
+  when: emptycrl.stat.exists == False
+
+
+- name: Check if ta.key exists
+  stat:
+    path: "{{ easyrsa.directory }}/pki/ta.key"
+  register: takey
+
+- name: Check if pki/dh{{ certificate.key_size }}.pem exists
+  stat:
+    path: "{{ easyrsa.directory }}/pki/dh{{ certificate.key_size }}.pem"
+  register: dhsize
+
+- name: Copy empty cert file into place
+  copy:
+    src: "{{ easyrsa.directory }}/pki/dh.pem"
+    dest: "{{ easyrsa.directory }}/pki/dh{{ certificate.key_size }}.pem"
+    owner: nobody
+    group: nogroup
+    mode: '0660'
+    remote_src: yes
+  when: dhsize.stat.exists == False
+
+- name: Generate DDOS protection key
+  shell: openvpn --genkey --secret {{ easyrsa.directory }}/pki/ta.key
+  args:
+    executable: /bin/bash
+    chdir: "{{ easyrsa.directory }}"
+  when: takey.stat.exists == False
+
+- name: Fix Perms for Non-Root Users...
+  file:
+    path: "{{ easyrsa.directory }}/pki/"
+    state: directory
+    owner: "{{ansible_user}}"
+    group: "{{ansible_user}}"
+    recurse: yes
+    mode: 0751
+  when: easykeysdir.stat.mode != 0751
+
+# FIXME: Support tls-crypt flag
+# FIXME: Need to support dhcpcd / multiple files
+
+#- name: Enable OpenVPN firewall rule execution in the network interface
+#  lineinfile:
+#    dest: /etc/network/interfaces
+#    insertafter: '^iface eth0'
+#    line: ' pre-up /etc/firewall-openvpn-rules.sh'
+#  notify: restart networking

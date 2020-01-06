@@ -1,0 +1,102 @@
+---
+
+#/etc/pivpn/
+
+- name: Check if pivpn directory exists
+  stat:
+    path: "/etc/pivpn/"
+  register: pivpn
+
+- name: create pivpn top-Level
+  file:
+    path: "/etc/pivpn/"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  when:
+    pivpn.stat.exists == False
+
+- name: Check if usrbin directory exists
+  stat:
+    path: "/home/{{ ansible_user }}/bin/"
+  register: userbin
+
+- name: create pivpn installed_user as {{ansible_user}}
+  file:
+    path: "/etc/pivpn/INSTALL_USER"
+    owner: root
+    group: root
+    mode: 0644
+    state: touch
+  when:
+    pivpn.stat.exists == False
+
+- name: add pivpn installed_user as {{ansible_user}}
+  shell:  cat > INSTALL_USER
+  args:
+    executable: /bin/bash
+    chdir: "/etc/pivpn"
+    stdin: "{{ansible_user}}"
+  when:
+    pivpn.stat.exists == False
+
+- name: "create usrbin path /home/{{ ansible_user }}/bin/"
+  file:
+    path: "/home/{{ ansible_user }}/bin/"
+    state: directory
+    owner: "{{ansible_user}}"
+    group: "{{ansible_user}}"
+    mode: 0755
+  when:
+    userbin.stat.exists == False
+
+- name: Check if usrbin directory exists again
+  stat:
+    path: "/home/{{ ansible_user }}/bin/"
+  register: userbin
+
+- name: Copy PIVPN scripts into place
+  copy:
+    src: "{{ item }}"
+    dest: "/home/{{ ansible_user }}/bin/"
+    mode: 0755
+    owner: "{{ansible_user}}"
+    group: "{{ansible_user}}"
+  with_fileglob:
+    - templates/pivpn/*
+  when:
+    userbin.stat.exists == True
+
+#/etc/openvpn/easy-rsa/pki/Default.txt
+
+- name: Check if pivpn Defaults exists
+  stat:
+    path: "{{ easyrsa.directory }}/pki/Default.txt"
+  register: pivpn_defaults
+
+- name: Copy Default client settings  into place
+  copy:
+    src: "templates/Default.txt"
+    dest: "{{ easyrsa.directory }}/pki/Default.txt"
+    mode: 0644
+    owner: "{{ansible_user}}"
+    group: "{{ansible_user}}"
+  when:
+    pivpn_defaults.stat.exists == False
+
+
+- name: Check if pivpn directory exists
+  stat:
+    path: "/home/{{ ansible_user }}/ovpns/"
+  register: ovpns
+
+- name: Create ovpns folder for user
+  file:
+    path: "/home/{{ ansible_user }}/ovpns/"
+    state: directory
+    owner: "{{ansible_user}}"
+    group: "{{ansible_user}}"
+    mode: 0700
+  when:
+    ovpns.stat.exists == False

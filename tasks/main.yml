@@ -1,6 +1,26 @@
 ---
 # tasks file for pipoe2h.pivpn
 
-- include: installation.yml
-- include: easy-rsa.yml
-- include: openvpn.yml
+- import_tasks: installation.yml
+  tags: openvpn_openvpn_install
+- import_tasks: easy-rsa.yml
+  tags: openvpn_easyrsa_install
+
+- import_tasks: openvpn.yml
+  tags: openvpn_configure
+
+# will install scripts to $USER / bin
+- import_tasks: pivpn.yml
+  tags: openvpn_pivpn_install
+
+
+#- name: "Don't forget to add static ip config"
+#  tags: openvpn_nagware
+#setDHCPCD() {
+    # Append these lines to dhcpcd.conf to enable a static IP
+#    echo "interface ${pivpnInterface}
+#    static ip_address=${IPv4addr}
+#    static routers=${IPv4gw}
+#    static domain_name_servers=${IPv4dns}" | $SUDO tee -a ${dhcpcdFile} >/dev/null
+#            $SUDO ip addr replace dev "${pivpnInterface}" "${IPv4addr}"
+#/etc/dhcpcd.conf
